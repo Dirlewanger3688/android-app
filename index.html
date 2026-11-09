@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="uk"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg">
+<title>План</title>
+<style>
+:root{color-scheme:dark;--g:#8a8a8a;--c:#111}
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:#fff;font:15px system-ui,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{display:flex;align-items:center;padding:10px 14px}h1{font-size:18px;margin:0;flex:1;font-weight:600}
+button,select,input{font:inherit;color:#fff;background:#000;border:1px solid #333;border-radius:8px;padding:8px 12px}
+button{cursor:pointer}button.p{background:#fff;color:#000;border-color:#fff}button.t{border:0;background:none;padding:6px 8px;color:#ccc}
+.tabs,.chips{display:flex;gap:6px;overflow-x:auto;padding:4px 10px;scrollbar-width:none}
+.tabs button,.chips button{white-space:nowrap;border-radius:99px;padding:6px 12px}
+.on{background:#fff!important;color:#000!important}
+main{padding:10px 14px 90px}
+.card{background:var(--c);border-radius:12px;padding:12px;margin:8px 0}
+.g{color:var(--g);font-size:12px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px}
+.bar{height:6px;background:#333;border-radius:3px;margin-top:8px}.bar i{display:block;height:100%;background:#fff;border-radius:3px}
+.fab{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;font-size:28px;padding:0}
+.grid7{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}.grid7 div{min-height:46px;border-radius:6px;padding:3px;font-size:13px}
+.q{display:grid;grid-template-columns:1fr 1fr;gap:8px}.q>div{background:var(--c);border-radius:12px;padding:10px;min-height:42vh;font-size:13px}
+.tl{overflow-x:auto}.tl table{border-collapse:collapse}.tl td{width:26px;min-width:26px;height:22px;padding:0;border:1px solid #000;background:#151515}
+.tl td:first-child{width:120px;min-width:120px;max-width:120px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;background:#000;font-size:12px;position:sticky;left:0}
+dialog{background:#0b0b0b;color:#fff;border:1px solid #333;border-radius:14px;width:min(94vw,420px);max-height:88vh}
+dialog label{display:block;margin:8px 0 2px;color:#aaa;font-size:12px}dialog input,dialog select{width:100%;margin-bottom:2px}
+dialog input[type=checkbox]{width:auto}.wd{display:inline-block!important;margin-right:8px!important}
+.bars{display:flex;align-items:flex-end;height:80px;gap:2px}.bars i{flex:1;background:#fff;min-height:2px}
+</style></head><body>
+<header><h1>План</h1><button class="t" onclick="voice()">Голос</button><button class="t" onclick="$('#mn').showModal()">⋮</button></header>
+<div class="tabs" id="tb"></div><div class="chips" id="ch"></div><main id="v"></main>
+<button class="p fab" onclick="openAdd()">+</button>
+<input type="file" id="fi" accept="application/json" hidden onchange="imp(event)">
+<dialog id="mn"><button class="t" onclick="exp();$('#mn').close()">Експорт / бекап (JSON)</button><br>
+<button class="t" onclick="$('#mn').close();$('#fi').click()">Імпорт JSON</button><br><button class="t" onclick="$('#mn').close()">Закрити</button></dialog>
+<dialog id="dlg"><form id="fm" onsubmit="return false">
+<label>Назва</label><input id="ti">
+<label>Тег</label><select id="c"></select><input id="cu" placeholder="або свій тег">
+<label>Тип</label><select id="k" onchange="fk()"><option value="DAY">Протягом дня</option><option value="EXACT">Точний час</option><option value="PERIOD">Протягом періоду</option></select>
+<div data-k="EXACT"><label>Час</label><input id="tm" type="time" value="14:30"></div>
+<div data-k="PERIOD"><label>Скільки разів / за скільки днів</label><input id="tg" type="number" value="3"><input id="dy" type="number" value="7"></div>
+<label>Повторення</label><select id="r" onchange="fk()"><option value="NONE">Немає</option><option value="DAILY">Щодня</option><option value="DAYS">Дні тижня</option><option value="INTERVAL">Кожні N днів</option></select>
+<div data-r="INTERVAL"><input id="ar" type="number" value="2"></div><div data-r="DAYS" id="wd"></div>
+<label>Тривалість, хв</label><input id="du" type="number" value="0">
+<label>Після завершення завдання</label><select id="dp"></select>
+<label><input type="checkbox" id="ps"> Наполегливе нагадування</label>
+<label><input type="checkbox" id="im"> Важливе</label><label><input type="checkbox" id="ug"> Термінове</label>
+<div style="margin-top:12px;text-align:right"><button type="button" onclick="$('#dlg').close()">Скасувати</button> <button type="button" class="p" onclick="addTask()">Додати</button></div>
+</form></dialog>
+<script>
+const $=s=>document.querySelector(s),LS='plan.v1',CATS=['Побут','Навчання','Здоров’я','Проєкти'],TABS=['Сьогодні','Календар','Матриця','Лінія','Статистика','Pomodoro','Журнал'];
+let S=JSON.parse(localStorage.getItem(LS)||'{"t":[],"l":[],"p":[]}'),tab=0,flt='',cm='M';
+S.l=S.l||[];S.p=S.p||[];S.pm=S.pm||{w:1,rem:1500,end:0};S.n=S.n||1+Math.max(0,...S.t.map(t=>t.id));
+const save=()=>localStorage.setItem(LS,JSON.stringify(S));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ed=(d=new Date())=>Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/864e5;
+const D=n=>new Date(n*864e5),dow=n=>(D(n).getUTCDay()+6)%7;
+const fmt=(n,o)=>D(n).toLocaleDateString('uk',{timeZone:'UTC',...o});
+const hm=m=>String(m/60|0).padStart(2,0)+':'+String(m%60).padStart(2,0);
+const at=(d,m)=>{const x=D(d);return new Date(x.getUTCFullYear(),x.getUTCMonth(),x.getUTCDate(),m/60|0,m%60).getTime()};
+const col=c=>({'Побут':'#b0b0b0','Навчання':'#7fa6d9','Здоров’я':'#7fc99a','Проєкти':'#d9b27f'})[c]||`hsl(${[...c].reduce((a,x)=>a+x.charCodeAt(0),0)*7%360} 35% 70%)`;
+let anc=ed();
+const get=id=>S.t.find(t=>t.id==id),log=(t,s)=>S.l.unshift({ts:Date.now(),x:s+' · '+t.title});
+// ---- логіка ----
+const occ=(t,d)=>{if(t.st!='P')return 0;if(t.k=='PERIOD')return d>=t.due&&d<=Math.max(t.pe,t.due);if(d<t.due)return 0;
+ return t.rep=='DAILY'?1:t.rep=='INTERVAL'?(d-t.due)%Math.max(1,t.arg)==0:t.rep=='DAYS'?(t.arg>>dow(d))&1:d==t.due};
+const nxt=(t,f)=>t.rep=='DAILY'?f+1:t.rep=='INTERVAL'?f+Math.max(1,t.arg):t.rep=='DAYS'?([1,2,3,4,5,6,7].map(i=>f+i).find(d=>(t.arg>>dow(d))&1)||f+1):f;
+const vis=(t,td)=>{if(t.st!='P'||t.due>td||t.last==td)return false;if(!t.dep)return true;const d=get(t.dep);return !d||d.last==td||d.st=='D'};
+const over=(t,td)=>t.k=='PERIOD'?t.pe>0&&t.pe<td:t.due<td;
+const sched=t=>{t.nx=null;if(t.k=='EXACT'&&t.min>=0&&t.st=='P'){const m=at(t.due,t.min);if(m>Date.now())t.nx=m}};
+const mk=o=>{const t={id:S.n++,title:'',cat:'Побут',k:'DAY',min:-1,dur:0,due:ed(),pe:0,target:1,done:0,rep:'NONE',arg:1,dep:0,streak:0,last:-1,st:'P',pers:0,imp:0,urg:0,nx:null,...o};
+ S.t.push(t);log(t,'Створено');sched(t);save();R()};
+const CI=(id,a)=>{const t=get(id);if(!t)return;const td=ed(),r=t.rep!='NONE';
+ if(a=='D'){t.streak=t.last==td-1?t.streak+1:t.last==td?t.streak:1;t.last=td;t.done++;
+  if(r){t.due=nxt(t,td);t.done=0}else if(t.done>=t.target)t.st='D';log(t,'Виконано');
+  S.t.filter(x=>x.dep==id&&x.st=='P'&&x.k!='EXACT').forEach(x=>x.nx=Date.now()+1000)}
+ else if(a=='S'){t.streak=0;if(r){t.due=nxt(t,td);t.last=td}else t.st='S';log(t,'Пропущено')}
+ else{t.due=td+1;if(t.k=='PERIOD')t.pe=Math.max(t.pe,t.due);log(t,'Відкладено')}
+ sched(t);save();R()};
+const mvAll=w=>{const td=ed(),l=S.t.filter(t=>vis(t,td)&&over(t,td)&&(!flt||t.cat==flt));
+ const cnt=o=>S.t.filter(x=>x.st=='P'&&x.due==td+o).length;let b=1;for(let o=2;o<=7;o++)if(cnt(o)<cnt(b))b=o;
+ const d=td+(w?1:b);l.forEach(t=>{t.due=d;if(t.k=='PERIOD')t.pe=Math.max(t.pe,d);log(t,'Перенесено');sched(t)});save();R()};
+const cyc=id=>{const t=get(id),n=((t.imp?2:0)+(t.urg?1:0)+3)%4;t.imp=n>>1&1;t.urg=n&1;save();R()};
+// ---- сповіщення (працюють, поки сторінка/PWA відкрита або в пам’яті браузера) ----
+const note=async(title,o={})=>{if(!window.Notification||Notification.permission!='granted')return;
+ try{(await navigator.serviceWorker.ready).showNotification(title,o)}catch{new Notification(title,o)}};
+const act=(a,id)=>{const t=get(id);if(!t)return;if(a=='D')CI(id,'D');
+ if(a=='Z'){t.nx=Date.now()+9e5;save()}if(a=='E'){const e=at(ed(),1140);t.nx=e>Date.now()?e:Date.now()+36e5;save()}};
+const tk=()=>{const td=ed(),n=Date.now();let ch=0;S.t.forEach(t=>{if(t.nx&&n>=t.nx&&vis(t,td)){
+ note(t.title,{body:t.cat,tag:'t'+t.id,data:t.id,requireInteraction:!!t.pers,actions:[{action:'D',title:'Зроблено'},{action:'Z',title:'Через 15 хв'},{action:'E',title:'Ввечері'}]});
+ t.nx=t.pers?n+6e5:null;ch=1}});if(ch)save()};
+// ---- голос ----
+const voice=()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return alert('Цей браузер не підтримує голосовий ввід (спробуйте Chrome)');
+ const r=new SR();r.lang='uk-UA';r.onresult=e=>vadd(e.results[0][0].transcript);r.start()};
+const vadd=s=>{const m=s.match(/(?:^|\s)(?:о|на|в)\s*(\d{1,2})(?:[:. ](\d{2}))?(?=\s|$)/);let ti=s.replace(/^(додай|створи|нагадай)\s*/i,'');
+ if(m)ti=ti.replace(m[0],' ');ti=ti.replace(/завтра|щодня/g,'').replace(/\s+/g,' ').trim();if(!ti)return;const mn=m?m[1]*60+(+m[2]||0):-1;
+ mk({title:ti[0].toUpperCase()+ti.slice(1),k:mn>=0?'EXACT':'DAY',min:mn,due:ed()+(/завтра/.test(s)?1:0),rep:/щодня/.test(s)?'DAILY':'NONE'})};
+// ---- екрани ----
+const row=t=>`<div class="card"><span class="dot" style="background:${col(t.cat)}"></span><b>${esc(t.title)}</b><div class="g">${t.min>=0?hm(t.min)+' · ':''}${t.dur?t.dur+' хв · ':''}${esc(t.cat)}${t.streak>1?' · серія '+t.streak:''}</div>${t.target>1?`<div class="bar"><i style="width:${t.done/t.target*100}%"></i></div><div class="g">${t.done}/${t.target}</div>`:''}<div><button class="t" onclick="CI(${t.id},'D')">Виконано</button><button class="t" onclick="CI(${t.id},'S')">Пропущено</button><button class="t" onclick="CI(${t.id},'P')">Відкласти</button></div></div>`;
+const V0=()=>{const td=ed(),v=S.t.filter(t=>vis(t,td)&&(!flt||t.cat==flt)),o=v.filter(t=>over(t,td));let h='';
+ if(o.length)h+=`<div class="g">Прострочено</div><button class="t" onclick="mvAll(1)">Усі на завтра</button><button class="t" onclick="mvAll(0)">На вільний день</button>`+o.map(row).join('');
+ ['Ранок','День','Вечір','Без часу'].forEach((n,i)=>{const l=v.filter(t=>!o.includes(t)&&(t.min<0?3:t.min<720?0:t.min<1020?1:2)==i).sort((a,b)=>a.min-b.min);
+  if(l.length)h+=`<div class="g" style="margin-top:14px">${n}</div>`+l.map(row).join('')});
+ return h||'<p class="g">На сьогодні нічого немає</p>'};
+const sh=k=>{const a=D(anc),y=a.getUTCFullYear(),m=a.getUTCMonth();anc=cm=='Y'?ed(new Date(y+k,m,1)):cm=='M'?ed(new Date(y,m+k,1)):anc+k*(cm=='W'?7:cm=='3'?3:1);R()};
+const V1=()=>{const L=S.t.filter(t=>!flt||t.cat==flt),a=D(anc),y=a.getUTCFullYear(),mo=a.getUTCMonth(),n=d=>L.filter(t=>occ(t,d)).length;
+ const ti=cm=='Y'?y:fmt(anc,cm=='M'?{month:'long',year:'numeric'}:{day:'numeric',month:'long',year:'numeric'});let b='';
+ if(cm=='Y')b=[...Array(12)].map((_,m)=>{const f=ed(new Date(y,m,1)),l=new Date(y,m+1,0).getDate();let c=0;for(let i=0;i<l;i++)c+=n(f+i);
+  return `<div class="card" onclick="anc=${f};cm='M';R()">${fmt(f,{month:'long'})}<span class="g" style="float:right">${c}</span></div>`}).join('');
+ else if(cm=='M'){const f=ed(new Date(y,mo,1)),l=new Date(y,mo+1,0).getDate(),o=dow(f);
+  b='<div class="grid7 g">'+['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].map(x=>`<div style="min-height:0">${x}</div>`).join('')+'</div><div class="grid7">'+'<div></div>'.repeat(o)+
+  [...Array(l)].map((_,i)=>{const c=n(f+i);return `<div style="background:var(--c);${f+i==ed()?'border:1px solid #fff':''}" onclick="anc=${f+i};cm='D';R()">${i+1}${c?`<br><span class="g">●${c}</span>`:''}</div>`}).join('')+'</div>'}
+ else{const c=cm=='W'?7:cm=='3'?3:1,s=cm=='W'?anc-dow(anc):anc;
+  b=[...Array(c)].map((_,i)=>{const d=s+i,l=L.filter(t=>occ(t,d)).sort((a,b)=>a.min-b.min);
+   return `<div class="card"><b>${fmt(d,{weekday:'long',day:'numeric',month:'long'})}</b>`+(l.map(t=>`<div><span class="dot" style="background:${col(t.cat)}"></span>${t.min>=0?hm(t.min)+(t.dur?'–'+hm((t.min+t.dur)%1440):'')+' ':''}${esc(t.title)}</div>`).join('')||'<div class="g">—</div>')+'</div>'}).join('')}
+ return `<div class="chips" style="padding:0">${[['Y','Рік'],['M','Місяць'],['W','Тиждень'],['3','3 дні'],['D','День']].map(([k,l])=>`<button class="${k==cm?'on':''}" onclick="cm='${k}';R()">${l}</button>`).join('')}</div><div style="display:flex;align-items:center"><button class="t" onclick="sh(-1)">‹</button><div style="flex:1;text-align:center">${ti}</div><button class="t" onclick="sh(1)">›</button></div>${b}`};
+const V2=()=>{const p=S.t.filter(t=>t.st=='P'&&(!flt||t.cat==flt)),
+ q=(n,s,i,u)=>`<div><b>${n}</b><div class="g">${s}</div>${p.filter(t=>!!t.imp==i&&!!t.urg==u).map(t=>`<div style="padding:5px 0" onclick="cyc(${t.id})">• ${esc(t.title)}</div>`).join('')}</div>`;
+ return `<div class="q">${q('Зробити','важливе · термінове',1,1)}${q('Запланувати','важливе · не термінове',1,0)}${q('Делегувати','не важливе · термінове',0,1)}${q('Відкинути','не важливе · не термінове',0,0)}</div><p class="g">Торкніться завдання, щоб перенести його в наступний квадрант</p>`};
+const V3=()=>{const td=ed(),f=td-1,L=S.t.filter(t=>t.st=='P'&&(!flt||t.cat==flt)).sort((a,b)=>a.cat<b.cat?-1:a.cat>b.cat?1:a.due-b.due),N=[...Array(21)];
+ return `<div class="tl"><table><tr><td></td>${N.map((_,i)=>`<td style="background:#000;text-align:center;font-size:11px;color:${f+i==td?'#fff':'#888'}">${D(f+i).getUTCDate()}</td>`).join('')}</tr>${L.map(t=>`<tr><td>${t.dep?'↳ ':''}${esc(t.title)}</td>${N.map((_,i)=>`<td${occ(t,f+i)?` style="background:${col(t.cat)}"`:''}></td>`).join('')}</tr>`).join('')}</table></div>${L.length?'':'<p class="g">Немає активних завдань</p>'}`};
+const byDay=p=>{const m={};S.l.filter(l=>l.x.startsWith(p)).forEach(l=>{const d=ed(new Date(l.ts));m[d]=(m[d]||0)+1});return m};
+const sum=(m,a,b)=>{let s=0;for(let i=a;i<=b;i++)s+=m[i]||0;return s};
+const pct=(c,p)=>p?((c>=p?'+':'')+Math.round((c-p)*100/p)+'%'):c?'нове':'0%';
+const cmp=m=>{const t=ed(),a=D(t),y=a.getUTCFullYear(),mo=a.getUTCMonth(),w=t-dow(t);
+ return [['Тиждень',w,w-7],['Місяць',ed(new Date(y,mo,1)),ed(new Date(y,mo-1,1))],['Рік',ed(new Date(y,0,1)),ed(new Date(y-1,0,1))]].map(([n,s,p])=>{
+  const c=sum(m,s,t),q=sum(m,p,Math.min(p+t-s,s-1));return `<div class="card"><div class="g">${n}</div><div style="font-size:22px">${c}</div><div class="g">було ${q} · ${pct(c,q)}</div></div>`}).join('')};
+const fc=m=>{const w=ed()-dow(ed()),ys=[6,5,4,3,2,1].map(i=>sum(m,w-7*i,w-7*i+6));if(ys.filter(y=>y>0).length<3)return null;
+ const ym=ys.reduce((a,b)=>a+b)/6;let nu=0,de=0;ys.forEach((y,i)=>{nu+=(i-2.5)*(y-ym);de+=(i-2.5)**2});const b=nu/de;return[Math.max(0,ym-b*2.5+b*6),b]};
+const V4=()=>{const d=byDay('Виконано'),k=byDay('Пропущено'),pm={};S.p.forEach(p=>{const x=ed(new Date(p.ts));pm[x]=(pm[x]||0)+p.m});
+ const td=ed(),v=[...Array(14)].map((_,i)=>d[td-13+i]||0),mx=Math.max(1,...v),d30=sum(d,td-29,td),s30=sum(k,td-29,td),f=fc(d);
+ return `<div class="g">Виконані завдання: цей період проти такого ж відрізка попереднього</div>${cmp(d)}<div class="g">Pomodoro, хвилини</div>${cmp(pm)}<div class="g">Останні 14 днів (макс. ${mx})</div><div class="bars">${v.map(x=>`<i style="height:${x/mx*100}%"></i>`).join('')}</div>
+ <p>Ефективність за 30 днів: ${d30+s30?Math.round(d30*100/(d30+s30))+'% (виконано '+d30+', пропущено '+s30+')':'—'}</p>
+ <p>${f?`Прогноз на наступний тиждень: ${Math.round(f[0])} завд. · тенденція: ${f[1]>.3?'зростання':f[1]<-.3?'спад':'стабільно'}`:'Прогноз: потрібно щонайменше 3 тижні з виконаними завданнями'}</p>`};
+const mmss=s=>String(s/60|0).padStart(2,0)+':'+String(s%60).padStart(2,0),left=()=>S.pm.end?Math.max(0,Math.ceil((S.pm.end-Date.now())/1000)):S.pm.rem;
+const V5=()=>{const td=ed(),m=S.p.filter(p=>ed(new Date(p.ts))==td).reduce((a,p)=>a+p.m,0);
+ return `<div style="text-align:center;margin-top:8vh"><div class="g">${S.pm.w?'Фокус':'Перерва'}</div><div id="pt" style="font-size:72px">${mmss(left())}</div><button class="p" onclick="pgo()">${S.pm.end?'Пауза':'Старт'}</button> <button onclick="prs()">Скинути</button><p class="g">Сьогодні: ${m/25|0} сесій, ${m} хв</p></div>`};
+const pgo=()=>{if(S.pm.end){S.pm.rem=left();S.pm.end=0}else S.pm.end=Date.now()+S.pm.rem*1000;save();R()};
+const prs=()=>{S.pm={w:1,rem:1500,end:0};save();R()};
+const pt=()=>{if(S.pm.end&&Date.now()>=S.pm.end){const w=S.pm.w;if(w)S.p.push({ts:Date.now(),m:25});
+ note('Pomodoro',{body:w?'Сесія завершена. Час відпочити 5 хв':'Перерва закінчилась'});S.pm={w:+!w,rem:w?300:1500,end:0};save();R()}
+ else if(tab==5&&$('#pt'))$('#pt').textContent=mmss(left())};
+const V6=()=>S.l.slice(0,200).map(l=>`<div class="g" style="color:#ccc;padding:3px 0">${new Date(l.ts).toLocaleString('uk',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}  ${esc(l.x)}</div>`).join('')||'<p class="g">Журнал порожній</p>';
+const R=()=>{$('#tb').innerHTML=TABS.map((n,i)=>`<button class="${i==tab?'on':''}" onclick="tab=${i};R()">${n}</button>`).join('');
+ $('#ch').innerHTML=['',...new Set([...CATS,...S.t.map(t=>t.cat)])].map(c=>`<button class="${c==flt?'on':''}" data-c="${esc(c)}">${c?esc(c):'Усі'}</button>`).join('');
+ $('#v').innerHTML=[V0,V1,V2,V3,V4,V5,V6][tab]()};
+$('#ch').onclick=e=>{const b=e.target.closest('button');if(b){flt=b.dataset.c;R()}};
+// ---- форма, імпорт/експорт ----
+const fk=()=>{document.querySelectorAll('[data-k]').forEach(e=>e.hidden=e.dataset.k!=$('#k').value);document.querySelectorAll('[data-r]').forEach(e=>e.hidden=e.dataset.r!=$('#r').value)};
+const openAdd=()=>{if(window.Notification&&Notification.permission=='default')Notification.requestPermission();
+ $('#c').innerHTML=[...new Set([...CATS,...S.t.map(t=>t.cat)])].map(c=>`<option>${esc(c)}</option>`).join('');
+ $('#dp').innerHTML='<option value="0">Незалежне</option>'+S.t.filter(t=>t.st=='P').map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('');
+ $('#wd').innerHTML=['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].map(x=>`<label class="wd"><input type="checkbox" class="wd">${x}</label>`).join('');fk();$('#dlg').showModal()};
+const addTask=()=>{const f=i=>$('#'+i),td=ed(),k=f('k').value,ti=f('ti').value.trim();if(!ti)return;const p=f('tm').value.split(':'),r=f('r').value;
+ const mask=[...document.querySelectorAll('input.wd')].reduce((a,c,i)=>a|(c.checked<<i),0);
+ mk({title:ti,cat:f('cu').value.trim()||f('c').value,k,min:k=='EXACT'?+p[0]*60+(+p[1]||0):-1,dur:+f('du').value||0,pe:k=='PERIOD'?td+(+f('dy').value||7):0,
+  target:k=='PERIOD'?+f('tg').value||1:1,rep:r,arg:r=='DAYS'?mask:+f('ar').value||1,dep:+f('dp').value||0,pers:f('ps').checked?1:0,imp:f('im').checked?1:0,urg:f('ug').checked?1:0});
+ $('#dlg').close();$('#fm').reset()};
+const exp=async()=>{const f=new File([JSON.stringify(S,null,1)],'plan.json',{type:'application/json'});
+ if(navigator.canShare?.({files:[f]})){try{await navigator.share({files:[f]});return}catch{}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download='plan.json';a.click()};
+const imp=e=>{const r=new FileReader();r.onload=()=>{try{const x=JSON.parse(r.result);if(!Array.isArray(x.t))throw 0;
+ if(!confirm('Замінити поточні дані даними з файлу?'))return;S=x;S.l=S.l||[];S.p=S.p||[];S.pm=S.pm||{w:1,rem:1500,end:0};S.n=S.n||1+Math.max(0,...S.t.map(t=>t.id));save();R();alert('Імпортовано завдань: '+S.t.length)}catch{alert('Помилка імпорту файлу')}};
+ r.readAsText(e.target.files[0]);e.target.value=''};
+// ---- запуск ----
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js');navigator.serviceWorker.addEventListener('message',e=>act(e.data.a,e.data.id))}
+navigator.storage?.persist?.();
+R();setInterval(tk,15000);setInterval(pt,1000);tk();
+const q=new URLSearchParams(location.search);if(q.get('a')){act(q.get('a'),q.get('id'));history.replaceState(0,'',location.pathname)}
+</script></body></html>
